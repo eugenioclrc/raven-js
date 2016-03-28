@@ -1,3 +1,4 @@
+/* global ga */
 /*global XDomainRequest:false*/
 'use strict';
 
@@ -17,8 +18,6 @@ var truncate = utils.truncate;
 var urlencode = utils.urlencode;
 var uuid4 = utils.uuid4;
 
-var dsnKeys = 'source protocol user pass host port path'.split(' '),
-    dsnPattern = /^(?:(\w+):)?\/\/(?:(\w+)(:\w+)?@)?([\w\.-]+)(?::(\d+))?(\/.*)/;
 
 function now() {
     return +new Date();
@@ -109,12 +108,6 @@ Raven.prototype = {
             });
         }
 
-        var uri = this._parseDSN(dsn),
-            lastSlash = uri.path.lastIndexOf('/'),
-            path = uri.path.substr(1, lastSlash);
-
-        this._dsn = dsn;
-
         // "Script error." is hard coded into browsers for errors that it can't read.
         // this is the result of a script being pulled in from an external domain and CORS.
         this._globalOptions.ignoreErrors.push(/^Script error\.?$/);
@@ -125,15 +118,6 @@ Raven.prototype = {
         this._globalOptions.ignoreUrls = this._globalOptions.ignoreUrls.length ? joinRegExp(this._globalOptions.ignoreUrls) : false;
         this._globalOptions.whitelistUrls = this._globalOptions.whitelistUrls.length ? joinRegExp(this._globalOptions.whitelistUrls) : false;
         this._globalOptions.includePaths = joinRegExp(this._globalOptions.includePaths);
-
-        this._globalKey = uri.user;
-        this._globalSecret = uri.pass && uri.pass.substr(1);
-        this._globalProject = uri.path.substr(lastSlash + 1);
-
-        this._globalServer = this._getGlobalServer(uri);
-
-        this._globalEndpoint = this._globalServer +
-            '/' + path + 'api/' + this._globalProject + '/store/';
 
         if (this._globalOptions.fetchContext) {
             TraceKit.remoteFetching = true;
@@ -492,13 +476,6 @@ Raven.prototype = {
      */
     isSetup: function() {
         if (!this._hasJSON) return false;  // needs JSON support
-        if (!this._globalServer) {
-            if (!this.ravenNotConfiguredError) {
-              this.ravenNotConfiguredError = true;
-              this._logDebug('error', 'Error: Raven has not been configured.');
-            }
-            return false;
-        }
         return true;
     },
 
@@ -523,28 +500,22 @@ Raven.prototype = {
             throw new RavenConfigError('Missing eventId');
         }
 
-        var dsn = options.dsn || this._dsn;
-        if (!dsn) {
-            throw new RavenConfigError('Missing DSN');
-        }
-
         var encode = encodeURIComponent;
         var qs = '';
         qs += '?eventId=' + encode(lastEventId);
-        qs += '&dsn=' + encode(dsn);
+        qs += '&dsn=';
 
         var user = options.user || this._globalContext.user;
         if (user) {
             if (user.name)  qs += '&name=' + encode(user.name);
             if (user.email) qs += '&email=' + encode(user.email);
         }
-
-        var globalServer = this._getGlobalServer(this._parseDSN(dsn));
-
+/*
         var script = document.createElement('script');
         script.async = true;
         script.src = globalServer + '/api/embed/error-page/' + qs;
         (document.head || document.body).appendChild(script);
+        */
     },
 
     /**** Private functions ****/
@@ -716,21 +687,7 @@ Raven.prototype = {
     },
 
     _parseDSN: function(str) {
-        var m = dsnPattern.exec(str),
-            dsn = {},
-            i = 7;
-
-        try {
-            while (i--) dsn[dsnKeys[i]] = m[i] || '';
-        } catch(e) {
-            throw new RavenConfigError('Invalid DSN: ' + str);
-        }
-
-        if (dsn.pass && !this._globalOptions.allowSecretKey) {
-            throw new RavenConfigError('Do not specify your secret key in the DSN. See: http://bit.ly/raven-secret-key');
-        }
-
-        return dsn;
+        return str;
     },
 
     _getGlobalServer: function(uri) {
@@ -929,7 +886,7 @@ Raven.prototype = {
 
 
     _send: function(data) {
-        var self = this;
+        // var self = this;
 
         var globalOptions = this._globalOptions;
 
@@ -992,15 +949,8 @@ Raven.prototype = {
 
         if (!this.isSetup()) return;
 
-        var auth = {
-            sentry_version: '7',
-            sentry_client: 'raven-js/' + this.VERSION,
-            sentry_key: this._globalKey
-        };
-        if (this._globalSecret) {
-            auth.sentry_secret = this._globalSecret;
-        }
-
+        ga('jserror', data.message, data.culprit);
+        /*
         var url = this._globalEndpoint;
         (globalOptions.transport || this._makeRequest).call(this, {
             url: url,
@@ -1019,7 +969,8 @@ Raven.prototype = {
                     src: url
                 });
             }
-        });
+        });*/
+
     },
 
     _makeImageRequest: function(opts) {
